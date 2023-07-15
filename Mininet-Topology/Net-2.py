@@ -88,6 +88,7 @@ def run():
     # Add routing for reaching networks that aren't directly connected
     info(net['R1'].cmd("ip route add 192.168.2.0/24 via 192.168.100.2 dev R1-eth3"))
     info(net['R2'].cmd("ip route add 192.168.1.0/24 via 192.168.100.1 dev R2-eth3"))
+    
 
 
 
