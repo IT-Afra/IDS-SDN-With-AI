@@ -1,20 +1,5 @@
-# Copyright (C) 2011 Nippon Telegraph and Telephone Corporation.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-# implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import os
-import subprocess
-
+import pyshark
 from ryu.base import app_manager
 from ryu.controller import ofp_event
 from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER
@@ -23,24 +8,21 @@ from ryu.ofproto import ofproto_v1_3
 from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
 from ryu.lib.packet import ether_types
-from ryu.lib.packet import ipv4
-from ryu.lib.packet import tcp
-from ryu.lib.packet import udp
-import array
 import threading
 import time
-from pylibpcap import wpcap
-class SimpleSwitch13(app_manager.RyuApp):
+
+import helper
+
+
+class ids(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
 
     def __init__(self, *args, **kwargs):
-        super(SimpleSwitch13, self).__init__(*args, **kwargs)
-        self.__sudo_pass = "1234"
+        super(ids, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
-        self.temp_packet = packet.Packet()
-        thread = threading.Thread(target=self.packet_handler, daemon=True)
-        thread.start()
-
+        self.startup_flag = 0
+        self.thrd_monitor = threading.Thread(target=self.monitor_handler)
+        self.thrd_monitor.start()
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -71,42 +53,28 @@ class SimpleSwitch13(app_manager.RyuApp):
                                 match=match, instructions=inst)
         datapath.send_msg(mod)
 
-    def packet_handler(self):
+    def monitor_handler(self):
         while True:
-            time.sleep(6)
-            os.system("xterm -e bash monitor.sh %s" % self.__sudo_pass)
-            time.sleep(60)
+            if(self.startup_flag == 0):
+                time.sleep(2)
+                self.startup_flag = 1
+            os.system("xterm -e bash monitor.sh")
+            cap = pyshark.FileCapture('./pcap_db.pcap')
+            pkt = cap.load_packets()
+            fl = helper.Filtters('./pcap_db.pcap')
+            cn = fl.feature_extractor()
+            print(cn)
+            for x in cn.values():
+                print(x)
 
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
         msg = ev.msg
-        # pcap_writer = pcaplib.Writer(open('pcap_db.pcap', 'ba'))
-        # pcap_writer.write_pkt(ev.msg.data)
-        #wpcap(msg.data, "pcap_db.pcap")
         datapath = msg.datapath
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
-        # time = ofproto.OFPBF_TIME
-        # print(time)
-        # pkt.has_flags(tcp.TCP_SYN, tcp.TCP_RST)
         in_port = msg.match['in_port']
-        # opf = ev.msg.datapath
-        # print(opf)
-        # costumize
-
-        pktt = packet.Packet(array.array('B', msg.data))
-        self.temp_packet = pktt
-        eth = pktt.get_protocol(ethernet.ethernet)
-        ipv4_pkt = pktt.get_protocol(ipv4.ipv4)
-        tcp_pkt = pktt.get_protocol(tcp.tcp)
-
-        udp_pkt = pktt.get_protocol(udp.udp)
-        print("mohsen pkt " + str(pktt))
-        print("mohsen eth " + str(eth))
-        print("mohsen ipv4 " + str(ipv4_pkt))
-        print("mohsen tcp " + str(tcp_pkt))
-        print("mohsen udp " + str(udp_pkt))
 
         pkt = packet.Packet(msg.data)
         eth = pkt.get_protocols(ethernet.ethernet)[0]
